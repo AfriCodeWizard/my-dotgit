@@ -5,6 +5,7 @@ const path = require('path');
 const logger = console; // Simple logger for demonstration
 const IgnoreManager = require('./lib/ignoreManager'); // Import IgnoreManager
 const StagingArea = require('./lib/stagingArea'); // Import StagingArea
+const crypto = require('crypto'); // Import crypto module for commit hash
 
 // Initialize the command line program
 const program = new Command();
@@ -70,6 +71,9 @@ program
             const ignoreManager = new IgnoreManager();
             await ignoreManager.loadIgnoreFile(); // Load default ignore rules
 
+            const stagingArea = new StagingArea(dotgitPath);
+            await stagingArea.load(); // Load the staging area
+
             logger.info('Initialized empty dotgit repository with standard structure');
         } catch (error) {
             logger.error(`Failed to initialize repository: ${error.message}`);
@@ -87,9 +91,7 @@ program
         ignoreManager.printRules();
     });
 
-// Parse command line arguments
-program.parse(process.argv);
-
+// Add command to stage files
 program
     .command('add <files...>')
     .description('Add file(s) to the staging area')
@@ -111,5 +113,69 @@ program
             } catch (error) {
                 console.error(`Failed to add ${filePath}: ${error.message}`);
             }
+        }
+    });
+
+// Commit command to create new commits
+program
+    .command('commit')
+    .description('Create a new commit with staged changes')
+    .requiredOption('-m, --message <message>', 'Commit message')
+    .action(async (options) => {
+        const dotgitPath = path.resolve('.dotgit');
+        const stagingArea = new StagingArea(dotgitPath);
+        await stagingArea.load();
+
+        if (stagingArea.stagedFiles.size === 0) {
+            console.error('Nothing to commit (no files staged)');
+            return;
+        }
+
+        const commitData = {
+            message: options.message,
+            timestamp: new Date().toISOString(),
+            files: Array.from(stagingArea.stagedFiles.entries()).map(([filePath, data]) => ({
+                path: filePath,
+                content: data.content,
+                size: data.size,
+                timestamp: data.timestamp,
+            })),
+        };
+
+        // Save commit data (you can implement a more complex commit structure later)
+        const commitHash = crypto.createHash('sha1').update(JSON.stringify(commitData)).digest('hex');
+        const commitPath = path.join(dotgitPath, 'objects', commitHash);
+        await fs.writeFile(commitPath, JSON.stringify(commitData, null, 2));
+
+        console.log(`Commit created: ${commitHash.substring(0, 7)} - ${options.message}`);
+
+        // Clear the staging area after committing
+        stagingArea.stagedFiles.clear();
+        await stagingArea.save();
+    });
+
+program
+    .command('log')
+    .description('Show commit history')
+    .action(async () => {
+        const dotgitPath = path.resolve('.dotgit');
+        const commits = await fs.readdir(path.join(dotgitPath, 'objects'));
+
+        if (commits.length === 0) {
+            console.log('No commits yet');
+            return;
+        }
+
+        console.log('\nCommit History:');
+        for (const commitHash of commits) {
+            const commitData = await fs.readFile(path.join(dotgitPath, 'objects', commitHash), 'utf8');
+            const commit = JSON.parse(commitData);
+            console.log(`\ncommit ${commitHash.substring(0, 7)}`);
+            console.log(`Message: ${commit.message}`);
+            console.log(`Date: ${commit.timestamp}`);
+            console.log(`Files:`);
+            commit.files.forEach(file => {
+                console.log(`- ${file.path} (size: ${file.size} bytes)`);
+            });
         }
     });
