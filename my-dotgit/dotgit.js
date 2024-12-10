@@ -89,3 +89,27 @@ program
 
 // Parse command line arguments
 program.parse(process.argv);
+
+program
+    .command('add <files...>')
+    .description('Add file(s) to the staging area')
+    .action(async (files) => {
+        const dotgitPath = path.resolve('.dotgit');
+        const stagingArea = new StagingArea(dotgitPath);
+        await stagingArea.load();
+
+        for (const filePath of files) {
+            try {
+                const content = await fs.readFile(filePath, 'utf8');
+                const fileData = {
+                    content,
+                    size: content.length,
+                    timestamp: new Date().toISOString(),
+                };
+                await stagingArea.addFile(filePath, fileData);
+                console.log(`Added ${filePath} to staging area.`);
+            } catch (error) {
+                console.error(`Failed to add ${filePath}: ${error.message}`);
+            }
+        }
+    });
