@@ -38,7 +38,7 @@ class IgnoreManager {
 
     printRules() {
         console.log('Current ignore rules:');
-        this.ig.rules.forEach(rule => console.log(`- ${rule}`));
+        this.ig._rules.forEach(rule => console.log(`- ${rule}`));
     }
 }
 
