@@ -179,3 +179,49 @@ program
             });
         }
     });
+
+program
+    .command('branch [branchName]')
+    .description('List, create, or delete branches')
+    .option('-d, --delete <branch>', 'Delete a branch')
+    .action(async (branchName, options) => {
+        const dotgitPath = path.resolve('.dotgit');
+        const branchesPath = path.join(dotgitPath, 'refs', 'heads');
+        await fs.mkdir(branchesPath, { recursive: true });
+
+        // Delete branch if -d option is used
+        if (options.delete) {
+            const branchToDelete = path.join(branchesPath, options.delete);
+            try {
+                await fs.unlink(branchToDelete);
+                console.log(`Deleted branch '${options.delete}'`);
+            } catch (error) {
+                console.error(`Failed to delete branch: ${error.message}`);
+            }
+            return;
+        }
+
+        // Create a new branch if branchName is provided
+        if (branchName) {
+            const newBranchPath = path.join(branchesPath, branchName);
+            try {
+                await fs.writeFile(newBranchPath, 'main'); // Point to main by default
+                console.log(`Created branch '${branchName}'`);
+            } catch (error) {
+                console.error(`Failed to create branch: ${error.message}`);
+            }
+            return;
+        }
+
+        // List all branches
+        const branches = await fs.readdir(branchesPath);
+        if (branches.length === 0) {
+            console.log('No branches yet');
+            return;
+        }
+
+        console.log('Branches:');
+        for (const branch of branches) {
+            console.log(`- ${branch}`);
+        }
+    });
